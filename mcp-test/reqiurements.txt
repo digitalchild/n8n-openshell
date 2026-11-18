@@ -1,0 +1,5 @@
+# Requires Python 3.11+
+# Install the latest available MCP 1.x SDK.
+# Major version 2 is excluded because its API may differ.
+mcp<2
+httpx

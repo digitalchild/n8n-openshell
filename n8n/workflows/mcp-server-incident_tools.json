@@ -1,0 +1,207 @@
+{
+  "name": "MCP Server: Incident Tools",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Participants start here\n\nThis workflow is the agent's entire repertoire.\n\nEvery node connected to the MCP Server Trigger becomes a tool the agent can see and call. Nothing else is available to it.\n\n**Exercise 2:** add a fourth tool called `list_incidents_by_assignee`.\n\n**Exercise 3:** add a fifth tool called `request_incident_status_change` that writes to `pending_actions`, not to `incidents`.\n\nRemember to **publish** the workflow, not just save it.",
+        "height": 540,
+        "width": 420,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fd3de3f6-6729-4e7d-9595-9f6d8f603a17",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### The description IS the API doc\n\nThe model never sees this workflow. It sees the tool name and the description text, and decides from those alone whether to call it.\n\nIf you cannot tell when to use a tool from its description, neither can the model.",
+        "height": 212,
+        "width": 516,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -48
+      ],
+      "id": "cd308b71-c628-4de6-8074-5a8f1157333a",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "authentication": "bearerAuth",
+        "path": "incident-tools"
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 2.1,
+      "position": [
+        784,
+        128
+      ],
+      "id": "72233c2c-1dcf-424b-be64-2e0b5e5ff669",
+      "name": "MCP Server Trigger",
+      "webhookId": "9ee9c326-68d9-4951-9f55-dfa23608266e",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "vrePqEwlOFZY7Nlk",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns the full detail of one specific incident, including its description and runbook reference. Use this after list_open_incidents when you need more than the summary. Requires the incident id in the form INC-NNNN, for example INC-2031.",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "eXbeeu2ejLTkAvuR",
+          "mode": "list",
+          "cachedResultName": "incidents",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/eXbeeu2ejLTkAvuR"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "incident_id",
+              "keyValue": "={{ $fromAI('incident_id', 'The incident ID to look up, in the form INC-NNNN', 'string') }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        576,
+        352
+      ],
+      "id": "b8ec0349-7603-4f90-8726-2a38062cc9fa",
+      "name": "get_incident"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Searches the runbook library by category and returns the remediation steps for that class of incident. Use this before proposing any action on an incident, so that your recommendation follows documented procedure. Valid categories are: database, network, auth, storage, deploy.",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "zfFUF49kQ9gHfaW8",
+          "mode": "list",
+          "cachedResultName": "runbooks",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/zfFUF49kQ9gHfaW8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "category",
+              "keyValue": "={{ $fromAI('category', 'The runbook category: database, network, auth, storage or deploy', 'string') }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        752,
+        368
+      ],
+      "id": "498ab7c9-9d0d-4d3c-a83f-fdbb4272b2b8",
+      "name": "search_runbooks"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns every incident that is currently open. Use this to get an overview of outstanding work, to find the highest severity item, or when asked what needs attention. Takes no parameters. Returns id, title, severity, status, assigned_to and created_at for each open incident.",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "eXbeeu2ejLTkAvuR",
+          "mode": "list",
+          "cachedResultName": "incidents",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/eXbeeu2ejLTkAvuR"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "open"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        912,
+        368
+      ],
+      "id": "652ec15d-85e9-4069-821f-c7f9dbc21c2b",
+      "name": "list_open_incidents"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "get_incident": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_runbooks": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "list_open_incidents": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "b18e5bc8-f44d-45cf-ac5e-0ace86d0d4b0",
+  "meta": {
+    "instanceId": "3f42b295b6333ac4c3ab7374e26e8926d361c353a146a1c7905925f04b8af222"
+  },
+  "nodeGroups": [],
+  "id": "NDMNAhr4Uwv7xffV",
+  "tags": [
+    {
+      "updatedAt": "2026-09-10T08:03:37.357Z",
+      "createdAt": "2026-09-10T08:03:37.357Z",
+      "id": "v74rDkVRmWbj0nik",
+      "name": "gtc-berlin-2026"
+    }
+  ]
+}

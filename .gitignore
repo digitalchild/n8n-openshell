@@ -1,0 +1,49 @@
+# Python
+.venv/
+.venv-render/
+__pycache__/
+*.py[cod]
+
+# Local secrets
+.env
+.env.*
+!.env.example
+*.key
+.token
+.token.*
+
+# Generated cloud-init, including temporary render files
+/cloud-init/user-data-rendered.yaml
+/cloud-init/.user-data-*
+
+# Generated local deployment files
+/local/generated/
+
+# Installed MCP client configuration
+**/incident-mcp/config.json
+
+# Generated MCP inventories
+mcp-tools.json
+mcp-tools-*.json
+local-mcp-tools.json
+
+# Local logs and policy inspection snapshots
+*.log
+*.before.yaml
+*.before.txt
+incident-mcp-working-policy.yaml
+incident-mcp-working-versions.txt
+
+# Private credential exports and intermediate export files
+*.SECRET.*
+.creds-raw.json
+/n8n/**/private/
+
+# macOS
+.DS_Store
+
+# lab guide 
+.stale
+node_modules/
+.wrangler/
+.DS_Store

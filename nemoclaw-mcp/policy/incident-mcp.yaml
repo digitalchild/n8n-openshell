@@ -1,0 +1,28 @@
+# HOST_IP is rendered by install.sh on the VM.
+# NemoClaw generates allowed_ips from --trusted-private-host.
+
+preset:
+  name: incident-mcp
+  description: Exact HTTPS incident MCP route for the Node skill client
+
+network_policies:
+  incident_mcp_http:
+    name: incident_mcp_http
+    endpoints:
+      - host: "HOST_IP"
+        port: 443
+        protocol: rest
+        tls: terminate
+        enforcement: enforce
+        rules:
+          - allow:
+              method: POST
+              path: /mcp/incident-tools
+          - allow:
+              method: GET
+              path: /mcp/incident-tools
+          - allow:
+              method: DELETE
+              path: /mcp/incident-tools
+    binaries:
+      - path: /usr/local/bin/node

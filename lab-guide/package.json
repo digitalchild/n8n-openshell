@@ -1,0 +1,11 @@
+{
+  "name": "agent-root-lab-guide",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lab guide for Your Agent Doesn't Get Root, GTC Berlin 2026",
+  "scripts": {
+    "dev": "npx serve . -l 8789",
+    "deploy": "npx wrangler pages deploy . --project-name=agent-root-lab"
+  },
+  "devDependencies": { "wrangler": "^3.90.0" }
+}

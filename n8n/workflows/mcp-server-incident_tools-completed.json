@@ -1,0 +1,366 @@
+{
+  "name": "MCP Server: Incident Tools Completed",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Participants start here\n\nThis workflow is the agent's entire repertoire.\n\nEvery node connected to the MCP Server Trigger becomes a tool the agent can see and call. Nothing else is available to it.\n\n**Exercise 2:** add a fourth tool called `list_incidents_by_assignee`.\n\n**Exercise 3:** add a fifth tool called `request_incident_status_change` that writes to `pending_actions`, not to `incidents`.\n\nRemember to **publish** the workflow, not just save it.",
+        "height": 540,
+        "width": 420,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "cb84500e-450e-42f3-9cb5-3183ac48ca34",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "### The description IS the API doc\n\nThe model never sees this workflow. It sees the tool name and the description text, and decides from those alone whether to call it.\n\nIf you cannot tell when to use a tool from its description, neither can the model.",
+        "height": 212,
+        "width": 516,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -48
+      ],
+      "id": "ed6a70cc-a6d4-4ab1-8b4c-fe6f0cd982b9",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "authentication": "bearerAuth",
+        "path": "incident-tools"
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpTrigger",
+      "typeVersion": 2.1,
+      "position": [
+        784,
+        128
+      ],
+      "id": "9022eba8-4a6f-47d9-8f0d-ad52c7553b59",
+      "name": "MCP Server Trigger",
+      "webhookId": "d885833d-3653-4aad-a13f-1231a46c2f99",
+      "credentials": {
+        "httpBearerAuth": {
+          "id": "vrePqEwlOFZY7Nlk",
+          "name": "Bearer Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns the full detail of one specific incident, including its description and runbook reference. Use this after list_open_incidents when you need more than the summary. Requires the incident id in the form INC-NNNN, for example INC-2031.",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "eXbeeu2ejLTkAvuR",
+          "mode": "list",
+          "cachedResultName": "incidents",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/eXbeeu2ejLTkAvuR"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "incident_id",
+              "keyValue": "={{ $fromAI('incident_id', 'The incident ID to look up, in the form INC-NNNN', 'string') }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        576,
+        352
+      ],
+      "id": "eb6f1fc9-dd18-4386-9a94-e644b609a930",
+      "name": "get_incident"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Searches the runbook library by category and returns the remediation steps for that class of incident. Use this before proposing any action on an incident, so that your recommendation follows documented procedure. Valid categories are: database, network, auth, storage, deploy.",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "zfFUF49kQ9gHfaW8",
+          "mode": "list",
+          "cachedResultName": "runbooks",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/zfFUF49kQ9gHfaW8"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "category",
+              "keyValue": "={{ $fromAI('category', 'The runbook category: database, network, auth, storage or deploy', 'string') }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        752,
+        368
+      ],
+      "id": "2f181ff2-1f4e-4b7a-88a8-249041217ac1",
+      "name": "search_runbooks"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns every incident that is currently open. Use this to get an overview of outstanding work, to find the highest severity item, or when asked what needs attention. Takes no parameters. Returns id, title, severity, status, assigned_to and created_at for each open incident.",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "eXbeeu2ejLTkAvuR",
+          "mode": "list",
+          "cachedResultName": "incidents",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/eXbeeu2ejLTkAvuR"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "open"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        912,
+        368
+      ],
+      "id": "29eb2b87-175b-480d-8069-c3b699c5e240",
+      "name": "list_open_incidents"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Returns all incidents currently assigned to a named person. Use this when asked who is working on what, or to check a person's workload before assigning them anything new. Requires the assignee's name exactly as stored, for example \"Priya Raman\". Returns an empty list if the person has no incidents.\n",
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "eXbeeu2ejLTkAvuR",
+          "mode": "list",
+          "cachedResultName": "incidents",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/eXbeeu2ejLTkAvuR"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "assigned_to",
+              "keyValue": "="
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        1104,
+        352
+      ],
+      "id": "35a2e46a-f603-4b67-9313-87953539c800",
+      "name": "list_incidents_by_assignee"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Request a change to an incident's status. This does NOT apply the change. It submits the request to a human approval queue and returns a confirmation that the request was queued. A person must approve it before anything is modified. Always include a clear justification, because the approver sees only what you write here. Do not tell the user the incident has been updated. Tell them the change has been submitted for approval. ",
+        "dataTableId": {
+          "__rl": true,
+          "value": "54PZRs4ejUKEVwKQ",
+          "mode": "list",
+          "cachedResultName": "pending actions",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/54PZRs4ejUKEVwKQ"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "action_type": "update_incident_status",
+            "incident_id": "={{ $fromAI('incident_id', 'The ID of the incident to update, in the form INC-NNNN', 'string') }}",
+            "new_value": "={{ $fromAI('new_status', 'The proposed new status: open, investigating or resolved', 'string') }}",
+            "justification": "={{ $fromAI('justification', 'A clear explaination of why this change is being proposed, written for a human approver', 'string')}}",
+            "status": "pending"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "action_type",
+              "displayName": "action_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "incident_id",
+              "displayName": "incident_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "new_value",
+              "displayName": "new_value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "justification",
+              "displayName": "justification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "requested_by",
+              "displayName": "requested_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTableTool",
+      "typeVersion": 1.1,
+      "position": [
+        1296,
+        352
+      ],
+      "id": "f910debd-821e-419c-bfb3-31fc9f968447",
+      "name": "request_incident_status_change"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "get_incident": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "search_runbooks": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "list_open_incidents": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "list_incidents_by_assignee": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "request_incident_status_change": {
+      "ai_tool": [
+        [
+          {
+            "node": "MCP Server Trigger",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveExecutionProgress": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "86457c7e-a572-4690-bf8d-a1cd0243c277",
+  "meta": {
+    "instanceId": "3f42b295b6333ac4c3ab7374e26e8926d361c353a146a1c7905925f04b8af222"
+  },
+  "nodeGroups": [],
+  "id": "shW4rEgpJajUG2Lm",
+  "tags": [
+    {
+      "updatedAt": "2026-09-10T08:03:37.357Z",
+      "createdAt": "2026-09-10T08:03:37.357Z",
+      "id": "v74rDkVRmWbj0nik",
+      "name": "gtc-berlin-2026"
+    }
+  ]
+}

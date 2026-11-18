@@ -1,0 +1,804 @@
+{
+  "name": "Approval Dashboard",
+  "nodes": [
+    {
+      "parameters": {
+        "multipleMethods": true,
+        "httpMethod": [
+          "POST",
+          "GET"
+        ],
+        "path": "approval-dashboard",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -544,
+        -32
+      ],
+      "id": "eca0bc5d-3c38-4e07-a45a-675322868431",
+      "name": "Webhook",
+      "webhookId": "594d7f91-c36a-4802-a844-c078b17a6e09"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        960,
+        -208
+      ],
+      "id": "69965364-9d27-421d-8846-50db4bee1b4c",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ═══════════════════════════════════════════════════════════════\n//  Approval Dashboard\n//  GET  branch → the queue, with form buttons (no JS)\n//  POST branch → a full confirmation page\n//\n//  multipleMethods routes by output index, not by $json.method.\n//  GetPendingActions and GetIncidents need \"Always Output Data\".\n// ═══════════════════════════════════════════════════════════════\n\n// Safe node reader. Returns [] if the node did not run on this branch.\nfunction tryNode(name) {\n  try {\n    const items = $(name).all();\n    return Array.isArray(items) ? items : [];\n  } catch (e) {\n    return [];\n  }\n}\n\nfunction firstJson(name) {\n  const items = tryNode(name);\n  return items.length ? (items[0].json || {}) : {};\n}\n\nfunction esc(s) {\n  return String(s ?? '')\n    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;').replace(/'/g, '&#39;');\n}\n\nfunction slug(s) {\n  return String(s ?? 'unknown').toLowerCase().replace(/[^a-z0-9]+/g, '-');\n}\n\nfunction fmt(date) {\n  if (!date) return '—';\n  const d = new Date(date);\n  if (isNaN(d)) return String(date);\n  const p = n => String(n).padStart(2, '0');\n  return `${p(d.getDate())}/${p(d.getMonth() + 1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`;\n}\n\nconst CSS = `\n  :root{\n    --bg:#0e0918; --card:#171023; --edge:rgba(255,255,255,.08);\n    --txt:#fff; --mute:rgba(255,255,255,.55); --dim:rgba(255,255,255,.35);\n    --orange:#fd8925; --green:#35a670; --red:#d91616; --pink:#eb4b72; --blue:#077ac7;\n  }\n  *{box-sizing:border-box}\n  body{\n    margin:0; background:var(--bg); color:var(--txt);\n    font-family:'Lexend',ui-sans-serif,system-ui,sans-serif;\n    letter-spacing:-.02em; padding:48px 24px 80px;\n  }\n  .wrap{max-width:1280px;margin:0 auto}\n  .narrow{max-width:760px}\n  h1{font-size:28px;font-weight:600;margin:0 0 6px}\n  .lede{color:var(--mute);font-size:15px;margin:0 0 32px;max-width:660px;line-height:1.6}\n  .card{background:var(--card);border:1px solid var(--edge);border-radius:14px;padding:24px;position:relative;overflow:hidden}\n  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:linear-gradient(90deg,var(--pink),var(--orange))}\n  .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px}\n  .k{font-size:13px;color:var(--mute);margin-bottom:8px}\n  .v{font-size:34px;font-weight:600;line-height:1}\n  .tablecard{background:var(--card);border:1px solid var(--edge);border-radius:14px;overflow:hidden}\n  .scroll{overflow-x:auto}\n  table{width:100%;border-collapse:collapse}\n  th{\n    text-align:left;font-size:12px;font-weight:600;text-transform:uppercase;\n    letter-spacing:.08em;color:var(--mute);padding:16px 20px;\n    border-bottom:1px solid var(--edge);white-space:nowrap;\n  }\n  td{padding:18px 20px;border-bottom:1px solid rgba(255,255,255,.04);font-size:14px;vertical-align:top}\n  tr:last-child td{border-bottom:0}\n  tbody tr:hover{background:rgba(255,255,255,.02)}\n  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;margin-bottom:4px}\n  .sub{color:var(--mute);font-size:13px;line-height:1.5}\n  .dim{color:var(--dim)}\n  .arrow{color:var(--mute);margin:0 10px}\n  .just{max-width:400px;line-height:1.55;color:rgba(255,255,255,.85);font-size:13px}\n  .nowrap{white-space:nowrap}\n  .badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;text-transform:capitalize}\n  .sev-critical{background:rgba(217,22,22,.18);color:#ff6b6b}\n  .sev-high{background:rgba(253,137,37,.15);color:var(--orange)}\n  .sev-medium{background:rgba(7,122,199,.15);color:#4da3dd}\n  .sev-low{background:rgba(255,255,255,.08);color:var(--mute)}\n  .sev-unknown{background:rgba(255,255,255,.06);color:var(--dim)}\n  .st-open{background:rgba(253,137,37,.15);color:var(--orange)}\n  .st-investigating{background:rgba(7,122,199,.15);color:#4da3dd}\n  .st-resolved{background:rgba(53,166,112,.15);color:var(--green)}\n  .st-unknown{background:rgba(255,255,255,.06);color:var(--dim)}\n  form{margin:0;display:flex;gap:8px}\n  .btn{\n    font-family:inherit;font-size:13px;font-weight:600;letter-spacing:-.01em;\n    border:0;border-radius:8px;padding:9px 16px;cursor:pointer;\n  }\n  .approve{background:var(--green);color:#06210f}\n  .reject{background:transparent;color:var(--mute);box-shadow:inset 0 0 0 1px var(--edge)}\n  .empty{text-align:center;padding:72px 24px}\n  .empty-title{font-size:16px;font-weight:600;color:var(--mute);margin-bottom:8px}\n  .empty-sub{font-size:14px;color:var(--dim);max-width:420px;margin:0 auto;line-height:1.6}\n  .foot{margin-top:24px;color:var(--mute);font-size:13px;line-height:1.6;max-width:660px}\n  .verdict{font-size:72px;font-weight:700;line-height:1;margin:0 0 12px;letter-spacing:-.04em}\n  .verdict.ok{color:var(--green)}\n  .verdict.no{color:var(--mute)}\n  .verdict-sub{font-size:17px;color:var(--mute);margin:0 0 40px;line-height:1.6;max-width:600px}\n  .detail{margin-bottom:28px}\n  .detail .row{display:flex;padding:16px 0;border-bottom:1px solid rgba(255,255,255,.06);gap:24px}\n  .detail .row:last-child{border-bottom:0}\n  .detail .lab{flex:0 0 190px;color:var(--mute);font-size:13px;padding-top:2px}\n  .detail .val{flex:1;font-size:15px;line-height:1.6}\n  .quote{color:rgba(255,255,255,.85);font-size:14px;line-height:1.65;border-left:2px solid var(--edge);padding-left:18px}\n  .link{\n    display:inline-block;margin-top:8px;font-size:14px;font-weight:600;\n    color:var(--txt);text-decoration:none;background:var(--card);\n    border:1px solid var(--edge);border-radius:8px;padding:12px 22px;\n  }\n  .stamp{font-size:13px;color:var(--dim);margin-top:32px;line-height:1.6}\n`;\n\nfunction page(title, bodyHtml, extraClass) {\n  return `<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n<title>${esc(title)}</title>\n<link rel=\"preconnect\" href=\"https://fonts.googleapis.com\">\n<link rel=\"preconnect\" href=\"https://fonts.gstatic.com\" crossorigin>\n<link href=\"https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap\" rel=\"stylesheet\">\n<style>${CSS}</style>\n</head>\n<body>\n<div class=\"wrap ${extraClass || ''}\">\n${bodyHtml}\n</div>\n</body>\n</html>`;\n}\n\n// ═══════════════════════════════════════════════════════════════\n//  POST branch — confirmation page\n// ═══════════════════════════════════════════════════════════════\nconst postPayload = firstJson('SetData');\n\nif (postPayload.decision) {\n  const req = firstJson('GetPendingAction');\n\n  let backUrl = '?';\n  const wh = firstJson('Webhook');\n  if (wh.webhookUrl) backUrl = wh.webhookUrl;\n\n  const approved = String(postPayload.decision).toLowerCase() === 'approve';\n  const verdict = approved ? 'Approved' : 'Rejected';\n  const verdictSub = approved\n    ? 'You applied this change. The incidents table has been updated.'\n    : 'Nothing was changed. The incident is exactly as it was.';\n\n  const changeCell = approved\n    ? `<span class=\"badge st-${esc(slug(req.new_value))}\">${esc(req.new_value || 'unknown')}</span>\n       <span class=\"sub dim\" style=\"margin-left:12px\">applied</span>`\n    : `<span class=\"badge st-unknown\">${esc(req.new_value || 'unknown')}</span>\n       <span class=\"sub dim\" style=\"margin-left:12px\">declined</span>`;\n\n  const confirmBody = `\n  <div class=\"verdict ${approved ? 'ok' : 'no'}\">${verdict}</div>\n  <p class=\"verdict-sub\">${verdictSub}</p>\n\n  <div class=\"card detail\">\n    <div class=\"row\">\n      <div class=\"lab\">Incident</div>\n      <div class=\"val\"><span class=\"mono\">${esc(req.incident_id || '—')}</span></div>\n    </div>\n    <div class=\"row\">\n      <div class=\"lab\">Requested change</div>\n      <div class=\"val\">${changeCell}</div>\n    </div>\n    <div class=\"row\">\n      <div class=\"lab\">Requested by</div>\n      <div class=\"val\">${esc(req.requested_by || 'agent')}<span class=\"sub dim\" style=\"margin-left:12px\">${esc(fmt(req.created_at || req.createdAt))}</span></div>\n    </div>\n    <div class=\"row\">\n      <div class=\"lab\">Its justification</div>\n      <div class=\"val\"><div class=\"quote\">${esc(req.justification || 'No justification given.')}</div></div>\n    </div>\n  </div>\n\n  <a class=\"link\" href=\"${esc(backUrl)}\">Back to the queue</a>\n\n  <p class=\"stamp\">\n    The agent asked for this change and stopped. A person decided it.\n    There is no tool in the agent's catalogue that writes to the incidents table.\n  </p>`;\n\n  return [{ json: { html: page(verdict, confirmBody, 'narrow') } }];\n}\n\n// ═══════════════════════════════════════════════════════════════\n//  GET branch — the queue\n// ═══════════════════════════════════════════════════════════════\nconst pending = tryNode('GetPendingActions')\n  .map(i => i.json)\n  .filter(r => r && r.id != null && r.incident_id);\n\nconst incidentIndex = {};\ntryNode('GetIncidents').forEach(i => {\n  const r = i.json;\n  if (r && r.incident_id) incidentIndex[r.incident_id] = r;\n});\n\nconst rows = pending.map(r => {\n  const inc = incidentIndex[r.incident_id] || {};\n  return {\n    rowId: r.id,\n    incidentId: r.incident_id,\n    incidentTitle: inc.title || 'Incident not found',\n    severity: slug(inc.severity),\n    currentStatus: inc.status || 'unknown',\n    proposed: r.new_value || 'unknown',\n    actionType: r.action_type || '—',\n    assignedTo: inc.assigned_to || '—',\n    justification: r.justification || 'No justification given.',\n    requestedBy: r.requested_by || 'agent',\n    created: r.created_at || r.createdAt\n  };\n});\n\nconst affected = new Set(rows.map(r => r.incidentId)).size;\n\nconst tableBody = rows.length\n  ? rows.map(r => `\n      <tr>\n        <td>\n          <div class=\"mono\">${esc(r.incidentId)}</div>\n          <div class=\"sub\">${esc(r.incidentTitle)}</div>\n          <div class=\"sub dim\">${esc(r.assignedTo)}</div>\n        </td>\n        <td><span class=\"badge sev-${esc(r.severity)}\">${esc(r.severity)}</span></td>\n        <td class=\"nowrap\">\n          <span class=\"badge st-${esc(slug(r.currentStatus))}\">${esc(r.currentStatus)}</span>\n          <span class=\"arrow\">&rarr;</span>\n          <span class=\"badge st-${esc(slug(r.proposed))}\">${esc(r.proposed)}</span>\n          <div class=\"sub dim\" style=\"margin-top:8px\">${esc(r.actionType)}</div>\n        </td>\n        <td class=\"just\">${esc(r.justification)}</td>\n        <td class=\"sub nowrap\">\n          ${esc(fmt(r.created))}\n          <div class=\"dim\" style=\"margin-top:4px\">by ${esc(r.requestedBy)}</div>\n        </td>\n        <td>\n          <form method=\"POST\">\n            <input type=\"hidden\" name=\"id\" value=\"${esc(r.rowId)}\">\n            <button class=\"btn approve\" type=\"submit\" name=\"decision\" value=\"approve\">Approve</button>\n            <button class=\"btn reject\"  type=\"submit\" name=\"decision\" value=\"reject\">Reject</button>\n          </form>\n        </td>\n      </tr>`).join('')\n  : `<tr><td colspan=\"6\" class=\"empty\">\n       <div class=\"empty-title\">Nothing waiting on you</div>\n       <div class=\"empty-sub\">When the agent requests a change to an incident it will appear here for review.</div>\n     </td></tr>`;\n\nconst queueBody = `\n  <h1>Approval Dashboard</h1>\n  <p class=\"lede\">\n    The agent can request a change to an incident. It cannot make one. Every row below is waiting on a person, and this page is the only thing in the system that writes to the incidents table.\n  </p>\n\n  <div class=\"stats\">\n    <div class=\"card\"><div class=\"k\">Waiting on you</div><div class=\"v\">${rows.length}</div></div>\n    <div class=\"card\"><div class=\"k\">Incidents affected</div><div class=\"v\">${affected}</div></div>\n    <div class=\"card\"><div class=\"k\">Agent write access</div><div class=\"v\">None</div></div>\n  </div>\n\n  <div class=\"tablecard\">\n    <div class=\"scroll\">\n      <table>\n        <thead>\n          <tr>\n            <th>Incident</th>\n            <th>Severity</th>\n            <th>Proposed change</th>\n            <th>The agent's justification</th>\n            <th>Requested</th>\n            <th></th>\n          </tr>\n        </thead>\n        <tbody>${tableBody}</tbody>\n      </table>\n    </div>\n  </div>\n\n  <p class=\"foot\">\n    Approving writes the new status to the incidents table and marks the request approved. Rejecting leaves the incident untouched.\n  </p>`;\n\nreturn [{ json: { html: page('Approval Dashboard', queueBody) } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -208
+      ],
+      "id": "33f7f09b-fcba-4d9a-a360-6d683591347a",
+      "name": "Render Dashboard"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "54PZRs4ejUKEVwKQ",
+          "mode": "list",
+          "cachedResultName": "pending actions",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/54PZRs4ejUKEVwKQ"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "status",
+              "keyValue": "pending"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        -16
+      ],
+      "id": "cc16e955-9439-4726-a8aa-7a0fe77586b9",
+      "name": "GetPendingActions",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "eXbeeu2ejLTkAvuR",
+          "mode": "list",
+          "cachedResultName": "incidents",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/eXbeeu2ejLTkAvuR"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "incident_id",
+              "keyValue": "={{ $json.incident_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        528,
+        -16
+      ],
+      "id": "f79454d4-773a-47a9-929f-74991c69d696",
+      "name": "GetIncidents",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "eXbeeu2ejLTkAvuR",
+          "mode": "list",
+          "cachedResultName": "incidents",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/eXbeeu2ejLTkAvuR"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "incident_id",
+              "keyValue": "={{ $json.incident_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "={{ $json.new_value }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "incident_id",
+              "displayName": "incident_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "title",
+              "displayName": "title",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "description",
+              "displayName": "description",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "category",
+              "displayName": "category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "severity",
+              "displayName": "severity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "assigned_to",
+              "displayName": "assigned_to",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        336,
+        -400
+      ],
+      "id": "162993e7-d227-41a0-a43e-b2ce9b284c19",
+      "name": "Apply Change To Incident"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "54PZRs4ejUKEVwKQ",
+          "mode": "list",
+          "cachedResultName": "pending actions",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/54PZRs4ejUKEVwKQ"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $('SetData').item.json.pending_action_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "={{ $('SetData').item.json.decision }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "action_id",
+              "displayName": "action_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "action_type",
+              "displayName": "action_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "incident_id",
+              "displayName": "incident_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "new_value",
+              "displayName": "new_value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "justification",
+              "displayName": "justification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "requested_by",
+              "displayName": "requested_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        496,
+        -400
+      ],
+      "id": "d5e763d8-9fbc-4668-8c4d-e943904a128f",
+      "name": "Mark Request Approved"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "dataTableId": {
+          "__rl": true,
+          "value": "54PZRs4ejUKEVwKQ",
+          "mode": "list",
+          "cachedResultName": "pending actions",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/54PZRs4ejUKEVwKQ"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $('SetData').item.json.pending_action_id }}"
+            }
+          ]
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "=rejected"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "action_id",
+              "displayName": "action_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "action_type",
+              "displayName": "action_type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "incident_id",
+              "displayName": "incident_id",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "new_value",
+              "displayName": "new_value",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "justification",
+              "displayName": "justification",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "requested_by",
+              "displayName": "requested_by",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "status",
+              "displayName": "status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "created_at",
+              "displayName": "created_at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1,
+      "position": [
+        320,
+        -208
+      ],
+      "id": "e7bb86e4-44ee-4408-aadb-e68aef3baabe",
+      "name": "Mark Request Rejected"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('SetData').item.json.decision }}",
+                    "rightValue": "approve",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "866d7f33-3204-4aa7-ace4-02f6481bc184"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Approved"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2a8d5886-2387-49ef-bf8a-1fcfeb902f63",
+                    "leftValue": "={{ $('SetData').item.json.decision }}",
+                    "rightValue": "reject",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Rejected"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "none"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        112,
+        -304
+      ],
+      "id": "938cf76d-96ff-43a3-8195-6d968eb03996",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "302ca01b-1b10-4fb1-a74b-062cefc63ea0",
+              "name": "decision",
+              "value": "={{ $json.body.decision }}",
+              "type": "string"
+            },
+            {
+              "id": "ca2977f2-3569-41dd-b379-52230a15e02a",
+              "name": "pending_action_id",
+              "value": "={{ $json.body.id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        -208,
+        -304
+      ],
+      "id": "1a9c22ff-577c-453d-8019-a0114d8e8de5",
+      "name": "SetData"
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "dataTableId": {
+          "__rl": true,
+          "value": "54PZRs4ejUKEVwKQ",
+          "mode": "list",
+          "cachedResultName": "pending actions",
+          "cachedResultUrl": "/projects/tjoh2AYnt82NxBCi/datatables/54PZRs4ejUKEVwKQ"
+        },
+        "filters": {
+          "conditions": [
+            {
+              "keyValue": "={{ $json.pending_action_id }}"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.dataTable",
+      "typeVersion": 1.1,
+      "position": [
+        -48,
+        -304
+      ],
+      "id": "44b2a343-4db3-4106-9eee-1bb7eb44bad5",
+      "name": "GetPendingAction"
+    },
+    {
+      "parameters": {
+        "content": "## One webhook, two jobs\n\n**Path:** `approval-dashboard`\n**Allow Multiple HTTP Methods:** on → `POST`, `GET`\n\nThe node routes by **output index**, not by a `method` field in the payload. There is no `$json.method` to switch on.\n\n- **Output 1** → POST → process a decision\n- **Output 2** → GET → render the dashboard\n\nOrder follows the `httpMethod` array, so POST is first because it is listed first. Reorder that array and these outputs swap.",
+        "height": 368,
+        "width": 608,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -1280,
+        -144
+      ],
+      "id": "14bdcfe6-e5af-4186-8d80-d0b8ebcff803",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## POST branch — process a decision\n\nThe browser sends only `{ decision, id }`. Nothing else is trusted.\n\n**SetData** pulls `decision` and `pending_action_id` out of the body.\n\n**GetPendingAction** loads that row from `pending_actions`. This is the important step: the incident to change and the value to write come from **the stored request**, not from the HTTP body. If they came from the body, a caller could name any incident it liked and the gate would be decorative.\n\n**Switch** reads `decision`. `approve` goes left, `reject` goes right.\n\n**Apply Change To Incident** is the only node in this workflow that writes to `incidents`.",
+        "height": 400,
+        "width": 608,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -816
+      ],
+      "id": "f64858f7-936f-4033-9844-a6645cb8ba3e",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## GET branch — render the dashboard\n\n**GetPendingActions** returns every row in `pending_actions` where `status = pending`.\n\n**GetIncidents** runs once per pending row and looks up the matching incident by `incident_id`, so the table can show the real title, severity and current status rather than just an ID.\n\nBoth nodes need **Always Output Data** switched on in Settings. With an empty queue they would otherwise return zero items, nothing downstream would execute, and the request would hang instead of showing the empty state.",
+        "height": 304,
+        "width": 608,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -512,
+        336
+      ],
+      "id": "74cca2a0-7278-402d-9e2b-0bd154695593",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## Both branches end here\n\n**Render Dashboard** detects which branch it came down by testing which upstream nodes actually ran.\n\n- Came via `SetData` → returns a small JSON ack. The page only checks the status code and updates the row in place.\n- Otherwise → builds the full HTML page.\n\n**Respond to Webhook** responds with text from `{{ $json.html }}` either way.\n\nThe page POSTs back to `window.location.href`, so there is no URL to find and replace per machine.",
+        "height": 384,
+        "width": 640,
+        "color": 7
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1168,
+        -320
+      ],
+      "id": "916a9c8d-925d-4d18-a411-f577b80f458b",
+      "name": "Sticky Note3"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "SetData",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "GetPendingActions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Render Dashboard": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetPendingActions": {
+      "main": [
+        [
+          {
+            "node": "GetIncidents",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetIncidents": {
+      "main": [
+        [
+          {
+            "node": "Render Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Change To Incident": {
+      "main": [
+        [
+          {
+            "node": "Mark Request Approved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Request Approved": {
+      "main": [
+        [
+          {
+            "node": "Render Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Request Rejected": {
+      "main": [
+        [
+          {
+            "node": "Render Dashboard",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Apply Change To Incident",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Mark Request Rejected",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SetData": {
+      "main": [
+        [
+          {
+            "node": "GetPendingAction",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GetPendingAction": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "6486cfbc-840d-43d4-89e2-ce45c96827d0",
+  "meta": {
+    "instanceId": "3f42b295b6333ac4c3ab7374e26e8926d361c353a146a1c7905925f04b8af222"
+  },
+  "nodeGroups": [],
+  "id": "TsVHmXWPusmPKxro",
+  "tags": [
+    {
+      "updatedAt": "2026-09-10T08:03:37.357Z",
+      "createdAt": "2026-09-10T08:03:37.357Z",
+      "id": "v74rDkVRmWbj0nik",
+      "name": "gtc-berlin-2026"
+    }
+  ]
+}

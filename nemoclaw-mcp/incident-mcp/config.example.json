@@ -1,0 +1,7 @@
+{
+  "server_url": "https://HOST_IP/mcp/incident-tools",
+  "proxy_url": null,
+  "token_file": ".token",
+  "request_timeout_sec": 15,
+  "total_timeout_sec": 60
+}

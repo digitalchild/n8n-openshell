@@ -1,0 +1,384 @@
+#cloud-config
+hostname: lab
+fqdn: lab.local
+preserve_hostname: false
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - ca-certificates
+  - curl
+  - git
+  - jq
+  - python3
+  - openssl
+  - binutils
+  - build-essential
+  - dbus-user-session
+
+ssh_pwauth: true
+
+groups:
+  - docker
+
+users:
+  - name: nvidia
+    groups: [sudo, docker]
+    shell: /bin/bash
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    lock_passwd: false
+    passwd: "$6$MoTt4FDCvlUbxcse$8K6ZQr5o9oSkvbb43xuL0MHPu.tD1A8xND1PRCVWyUQhFmw7RWw/sTR9F./O7awE3/yHHmOjuCNlhyvaz3GuR/"
+
+write_files:
+  - path: /home/nvidia/.config/nemoclaw/env
+    defer: true
+    permissions: "0600"
+    owner: nvidia:nvidia
+    content: |
+      NVIDIA_INFERENCE_API_KEY=nvapi-REPLACE-ME
+      NEMOCLAW_MODEL=__NEMOCLAW_MODEL__
+      NEMOCLAW_SPARK_PROFILE=vllm.dgx-spark-gb10.single.nemotron-3.5-lightning-30b-a3b-nvfp4
+      NEMOCLAW_SPARK_SUPER_MODEL=nemotron-3-super
+      NEMOCLAW_VLLM_HF_MODEL=nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-NVFP4
+      NEMOCLAW_SPARK_SUPER_VLLM_IMAGE=vllm/vllm-openai:cu130-nightly
+      NEMOCLAW_CORPORATE_CA_BUNDLE=/usr/local/share/ca-certificates/caddy-lab-root.crt
+
+  - path: /home/nvidia/lab/n8n-owner.env
+    defer: true
+    permissions: "0600"
+    owner: nvidia:nvidia
+    content: |
+      N8N_INSTANCE_OWNER_MANAGED_BY_ENV=true
+      N8N_INSTANCE_OWNER_EMAIL=student@lab.example
+      N8N_INSTANCE_OWNER_FIRST_NAME=Lab
+      N8N_INSTANCE_OWNER_LAST_NAME=Student
+      N8N_INSTANCE_OWNER_PASSWORD_HASH='PASTE_BCRYPT_HASH_HERE'
+      N8N_PERSONALIZATION_ENABLED=__N8N_PERSONALIZATION_ENABLED__
+      N8N_DISABLED_MODULES='__N8N_DISABLED_MODULES__'
+      N8N_LICENSE_ACTIVATION_KEY='__N8N_LICENSE_ACTIVATION_KEY__'
+      N8N_ENCRYPTION_KEY=bt61191-local-lab-encryption-key
+
+  - path: /home/nvidia/lab/docker-compose.yml
+    defer: true
+    permissions: "0644"
+    owner: nvidia:nvidia
+    content: |
+      name: lab
+
+      volumes:
+        n8n_data:
+        caddy_data:
+        caddy_config:
+
+      services:
+        n8n:
+          image: n8nio/n8n:2.38.4
+          restart: unless-stopped
+          env_file:
+            - ./n8n-owner.env
+          environment:
+            N8N_PORT: "5678"
+            N8N_PROTOCOL: https
+            N8N_HOST: "${VM_IP}"
+            N8N_WEBHOOK_URL: "https://${VM_IP}/"
+            N8N_EDITOR_BASE_URL: "https://${VM_IP}/"
+            N8N_PROXY_HOPS: "1"
+            N8N_SECURE_COOKIE: "true"
+            N8N_ENCRYPTION_KEY: "${N8N_ENCRYPTION_KEY}"
+            NODE_ENV: production
+            GENERIC_TIMEZONE: Europe/Berlin
+            TZ: Europe/Berlin
+          volumes:
+            - n8n_data:/home/node/.n8n
+
+        caddy:
+          image: caddy:2
+          restart: unless-stopped
+          ports:
+            - "${VM_IP}:443:443"
+          volumes:
+            - ./Caddyfile:/etc/caddy/Caddyfile:ro
+            - caddy_data:/data
+            - caddy_config:/config
+          depends_on:
+            - n8n
+
+  - path: /home/nvidia/lab/Caddyfile.template
+    defer: true
+    permissions: "0644"
+    owner: nvidia:nvidia
+    content: |
+      {
+        auto_https disable_redirects
+        default_sni ${VM_IP}
+      }
+
+      https://${VM_IP} {
+        tls internal
+        reverse_proxy n8n:5678 {
+          flush_interval -1
+        }
+      }
+
+  - path: /home/nvidia/lab/spark-super/docker-compose.vllm.yml
+    defer: true
+    permissions: "0644"
+    owner: nvidia:nvidia
+    content: |
+      services:
+        vllm:
+          image: "${NEMOCLAW_SPARK_SUPER_VLLM_IMAGE}"
+          restart: unless-stopped
+          ipc: host
+          gpus: all
+          environment:
+            VLLM_NVFP4_GEMM_BACKEND: marlin
+            VLLM_ALLOW_LONG_MAX_MODEL_LEN: "1"
+            VLLM_FLASHINFER_ALLREDUCE_BACKEND: trtllm
+            VLLM_USE_FLASHINFER_MOE_FP4: "0"
+            HF_TOKEN: "${HF_TOKEN}"
+          volumes:
+            - ${HF_CACHE_DIR}:/root/.cache/huggingface
+            - ./super_v3_reasoning_parser.py:/app/super_v3_reasoning_parser.py:ro
+          ports:
+            - "8000:8000"
+          command:
+            - --model
+            - "${NEMOCLAW_VLLM_HF_MODEL}"
+            - --served-model-name
+            - "${NEMOCLAW_MODEL}"
+            - --host
+            - 0.0.0.0
+            - --port
+            - "8000"
+            - --async-scheduling
+            - --dtype
+            - auto
+            - --kv-cache-dtype
+            - fp8
+            - --tensor-parallel-size
+            - "1"
+            - --pipeline-parallel-size
+            - "1"
+            - --data-parallel-size
+            - "1"
+            - --trust-remote-code
+            - --gpu-memory-utilization
+            - "0.90"
+            - --enable-chunked-prefill
+            - --max-num-seqs
+            - "4"
+            - --max-model-len
+            - "1000000"
+            - --moe-backend
+            - marlin
+            - --mamba_ssm_cache_dtype
+            - float32
+            - --quantization
+            - fp4
+            - --speculative_config
+            - '{"method":"mtp","num_speculative_tokens":3,"moe_backend":"triton"}'
+            - --reasoning-parser-plugin
+            - /app/super_v3_reasoning_parser.py
+            - --reasoning-parser
+            - super_v3
+            - --enable-auto-tool-choice
+            - --tool-call-parser
+            - qwen3_coder
+
+  - path: /etc/profile.d/nemoclaw.sh
+    permissions: "0644"
+    content: |
+      export PATH="$HOME/.local/bin:$PATH"
+      if [ -r "$HOME/.config/nemoclaw/env" ]; then
+        set -a
+        . "$HOME/.config/nemoclaw/env"
+        set +a
+      fi
+
+  - path: /opt/lab/provision.sh
+    permissions: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -Eeuo pipefail
+
+      LOG=/var/log/lab-provision.log
+      touch "$LOG"
+      chmod 0600 "$LOG"
+      exec > >(tee -a "$LOG") 2>&1
+      trap 'echo "Provisioning failed at line $LINENO." >&2' ERR
+
+      LAB_DIR=/home/nvidia/lab
+      MCP_DIR=/opt/lab/nemoclaw-mcp
+      CA_FILE=/usr/local/share/ca-certificates/caddy-lab-root.crt
+
+      echo "=== Lab provisioning started $(date -Is) ==="
+
+      test -s "$MCP_DIR/install.sh"
+      test -s /opt/lab/incident-mcp.token
+
+      if grep -q 'PASTE_BCRYPT_HASH_HERE' "$LAB_DIR/n8n-owner.env" ||
+         grep -q 'nvapi-REPLACE-ME' /home/nvidia/.config/nemoclaw/env; then
+        echo "Deploy user-data-rendered.yaml, not the source template." >&2
+        exit 1
+      fi
+
+      VM_IP="$(ip -4 route get 1.1.1.1 |
+        awk '{for(i=1;i<=NF;i++) if($i=="src"){print $(i+1); exit}}')"
+      test -n "$VM_IP"
+      echo "VM IP: $VM_IP"
+
+      # Docker.
+      if ! command -v docker >/dev/null 2>&1; then
+        install -m 0755 -d /etc/apt/keyrings
+
+        curl -fsSL --retry 3 https://download.docker.com/linux/ubuntu/gpg \
+          -o /etc/apt/keyrings/docker.asc
+        chmod 0644 /etc/apt/keyrings/docker.asc
+
+        . /etc/os-release
+        ARCH="$(dpkg --print-architecture)"
+
+        cat > /etc/apt/sources.list.d/docker.sources <<EOF
+      Types: deb
+      URIs: https://download.docker.com/linux/ubuntu
+      Suites: ${UBUNTU_CODENAME:-$VERSION_CODENAME}
+      Components: stable
+      Architectures: ${ARCH}
+      Signed-By: /etc/apt/keyrings/docker.asc
+      EOF
+
+        apt-get update
+        apt-get install -y docker-ce docker-ce-cli containerd.io \
+          docker-buildx-plugin docker-compose-plugin
+      fi
+
+      systemctl enable --now docker
+      usermod -aG docker nvidia
+
+      # Compose settings. Copy the fixed key from n8n-owner.env.
+      cd "$LAB_DIR"
+
+      if [ ! -f .env ]; then
+        (
+          umask 077
+          printf 'VM_IP=%s\n' "$VM_IP"
+          grep '^N8N_ENCRYPTION_KEY=' n8n-owner.env
+        ) > .env
+        chown nvidia:nvidia .env
+      else
+        grep -Fxq "VM_IP=$VM_IP" .env
+      fi
+
+      sed "s/\${VM_IP}/$VM_IP/g" Caddyfile.template > Caddyfile
+
+      chmod 0644 Caddyfile
+      chown nvidia:nvidia Caddyfile
+
+      docker compose config --quiet
+      docker compose pull
+      docker compose up -d
+
+      # Create and trust Caddy's CA before onboarding NemoClaw.
+      for i in $(seq 1 90); do
+        if docker compose exec -T caddy \
+          test -s /data/caddy/pki/authorities/local/root.crt; then
+          break
+        fi
+        sleep 2
+      done
+
+      docker compose exec -T caddy \
+        cat /data/caddy/pki/authorities/local/root.crt > "$CA_FILE"
+
+      openssl x509 -in "$CA_FILE" -noout
+      chmod 0644 "$CA_FILE"
+      update-ca-certificates
+
+      install -m 0644 -o nvidia -g nvidia \
+        "$CA_FILE" "$LAB_DIR/caddy-lab-root.crt"
+
+      # Verify n8n over HTTPS.
+      for i in $(seq 1 90); do
+        if curl -fsS --max-time 5 --cacert "$CA_FILE" \
+          "https://${VM_IP}/healthz" >/dev/null; then
+          break
+        fi
+        sleep 2
+      done
+
+      curl -fsS --max-time 10 --cacert "$CA_FILE" \
+        "https://${VM_IP}/healthz" >/dev/null
+
+      # User systemd session.
+      USER_UID="$(id -u nvidia)"
+      loginctl enable-linger nvidia
+      systemctl start "user@${USER_UID}.service"
+
+      for i in $(seq 1 30); do
+        [ -S "/run/user/${USER_UID}/bus" ] && break
+        sleep 1
+      done
+      test -S "/run/user/${USER_UID}/bus"
+
+      # Same release number as the working VM. No local source patches.
+      sudo -H -u nvidia env \
+        XDG_RUNTIME_DIR="/run/user/${USER_UID}" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${USER_UID}/bus" \
+        bash <<'NEMOEOF'
+      set -euo pipefail
+      export PATH="$HOME/.local/bin:$PATH"
+      set -a
+      . "$HOME/.config/nemoclaw/env"
+      set +a
+
+      export NEMOCLAW_INSTALL_TAG=v0.0.112
+      export NEMOCLAW_INSTALL_REF=v0.0.112
+      export NEMOCLAW_AGENT=openclaw
+      export NEMOCLAW_SANDBOX_NAME=lab
+      export NEMOCLAW_NON_INTERACTIVE=1
+      export NEMOCLAW_ACCEPT_THIRD_PARTY_SOFTWARE=1
+      export NEMOCLAW_PROVIDER=build
+      export NEMOCLAW_WEB_SEARCH_PROVIDER=none
+      export NEMOCLAW_POLICY_TIER=restricted
+
+      curl -fsSL --retry 3 https://www.nvidia.com/nemoclaw.sh | bash
+      NEMOEOF
+
+      # The installer renders HOST_IP in the client and policy templates.
+      sudo -H -u nvidia env \
+        PATH="/home/nvidia/.local/bin:$PATH" \
+        XDG_RUNTIME_DIR="/run/user/${USER_UID}" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${USER_UID}/bus" \
+        HOST_IP="$VM_IP" \
+        INCIDENT_MCP_TOKEN_FILE=/opt/lab/incident-mcp.token \
+        bash "$MCP_DIR/install.sh" lab
+
+      # Apply the rendered policy, never the HOST_IP template.
+      MCP_POLICY=/home/nvidia/.local/state/nemoclaw-mcp/lab/incident-mcp.yaml
+      test -s "$MCP_POLICY"
+
+      sudo -H -u nvidia env \
+        PATH="/home/nvidia/.local/bin:$PATH" \
+        XDG_RUNTIME_DIR="/run/user/${USER_UID}" \
+        DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${USER_UID}/bus" \
+        nemoclaw lab policy add \
+          --from-file "$MCP_POLICY" \
+          --trusted-private-host "$VM_IP" \
+          --yes
+
+      rm -f /opt/lab/incident-mcp.token
+
+      echo "=== Lab infrastructure ready $(date -Is) ==="
+      echo "n8n: https://${VM_IP}/"
+      echo "Login: student@lab.example"
+      echo "Dynamic MCP skill and policy installed."
+      echo "No managed mcp add was run."
+      echo "Students must import and publish the workflow with its matching credential."
+      echo "MCP connectivity is not tested until the workflow exists."
+
+runcmd:
+  - [bash, /opt/lab/provision.sh]
+
+final_message: "Cloud-init finished after $UPTIME seconds. Check cloud-init status --long and /var/log/lab-provision.log."

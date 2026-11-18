@@ -1,0 +1,6 @@
+rb_id,category,steps
+RB-01,database,"Check replica lag, confirm primary health, fail over only with DBA sign-off. Never truncate. Escalate to platform if lag exceeds 300s."
+RB-02,network,Confirm blast radius from two vantage points before declaring. Check recent config pushes first. Do not restart the load balancer during business hours.
+RB-03,auth,"Never disable MFA to clear an incident. Rotate the affected credential, invalidate sessions, then confirm the error rate falls before closing."
+RB-04,storage,Expand before you delete. Confirm retention policy with the data owner. Snapshot before any destructive operation.
+RB-05,deploy,Roll back before you debug forward. Capture the failing manifest first. A stuck canary past 30 minutes is an automatic rollback.
