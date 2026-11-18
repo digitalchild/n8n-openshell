@@ -2,6 +2,8 @@
 
 GTC Berlin 2026 X-Lab. 105 minutes, beginner.
 
+To set up a DGX Spark, start with [`local/README.md`](local/README.md).
+
 This repository prepares the infrastructure and exercises for a 50-VM training
 lab. Each VM runs n8n and an OpenClaw agent inside a NemoClaw/OpenShell sandbox.
 
@@ -25,9 +27,8 @@ skill. It does not use mcporter or NemoClaw's managed `mcp add` registration.
 | `n8n/datatables/` | Seed CSV files for incidents, pending actions, and runbooks. |
 | `n8n/workflows/` | The incident-tools MCP workflow (starter and completed) and the approval dashboard. |
 | `mcp-test/` | Independent Python MCP discovery checker for testing an endpoint outside the sandbox. |
-| [`local/`](local/README.md) | Generated local and DGX Spark deployments derived from cloud-init provisioning. |
+| [`local/`](local/README.md) | **Start here.** DGX Spark setup, default access details, demo prompts, troubleshooting and tools. |
 | [`scripts/reset-nemoclaw.sh`](scripts/reset-nemoclaw.sh) | Detects and resets the active local, Spark, or Spark Super NemoClaw setup. |
-| [`docs/SPARK_DEMO.md`](docs/SPARK_DEMO.md) | Set up a DGX Spark for the demo: default access details, setup steps, demo prompts and troubleshooting. |
 | `docs/ARCHITECTURE.md` | Architecture and security-boundary documentation. |
 | `docs/SETUP.md` | Environment setup and verification guidance. |
 | `docs/RUNBOOK.md` | Troubleshooting history and recovery guidance. |
