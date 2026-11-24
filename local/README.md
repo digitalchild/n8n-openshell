@@ -271,6 +271,8 @@ afterwards.
 | Forgot the n8n password | | Use the default from [Default access details](#default-access-details). If you changed it in the n8n UI, run `docker compose exec n8n n8n user-management:reset`, then `docker compose restart n8n`, and create the owner again with the same email. |
 | `client.js tools` returns 401 | The token in the sandbox and the n8n credential differ | Follow **MCP bearer token** in [Change the defaults](#change-the-defaults) |
 | `client.js tools` returns no tools or 404 | The workflow is saved but not published | Publish the workflow |
+| `GPU memory capacity 0 is below the recipe minimum` | The Spark uses a non-English locale, or another vLLM holds the memory | Render again: the installer now sets `LC_ALL=C`. With an older render, run `LC_ALL=C LANG=C ./install-nemoclaw.sh`. Check `docker ps` for another `nemoclaw-vllm` and stop it if you may. |
+| `--profile cannot be added while resuming a legacy onboarding session` | A saved onboarding session from an earlier run | Render again: the installer now passes `--fresh`. |
 | The agent says `Tool exec not found` | The sandbox was onboarded with tool search on | Run `./install-nemoclaw.sh` again. It onboards with direct tool disclosure. |
 | Replies are very slow or time out | The model is still loading, or Super is too slow for live use | Wait for vLLM to finish loading. Use the `spark` target for live demos. |
 

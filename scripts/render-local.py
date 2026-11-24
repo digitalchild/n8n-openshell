@@ -290,6 +290,8 @@ def render(args):
         if args.target == "local":
             install = f'''#!/usr/bin/env bash
 set -euo pipefail
+# NemoClaw parses command output in English. Other locales break its GPU memory check.
+export LC_ALL=C LANG=C
 ROOT="$(cd -- "$(dirname -- "${{BASH_SOURCE[0]}}")" && pwd)"
 cd "$ROOT"
 set -a
@@ -320,6 +322,8 @@ fi
         elif args.target == "spark":
             install = f'''#!/usr/bin/env bash
 set -euo pipefail
+# NemoClaw parses command output in English. Other locales break its GPU memory check.
+export LC_ALL=C LANG=C
 ROOT="$(cd -- "$(dirname -- "${{BASH_SOURCE[0]}}")" && pwd)"
 cd "$ROOT"
 set -a
@@ -352,6 +356,8 @@ nemoclaw onboard --profile "$NEMOCLAW_PROFILE" --name lab --gpu --fresh \\
         else:
             install = f'''#!/usr/bin/env bash
 set -euo pipefail
+# NemoClaw parses command output in English. Other locales break its GPU memory check.
+export LC_ALL=C LANG=C
 ROOT="$(cd -- "$(dirname -- "${{BASH_SOURCE[0]}}")" && pwd)"
 cd "$ROOT"
 set -a
