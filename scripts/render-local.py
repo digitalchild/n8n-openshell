@@ -344,7 +344,8 @@ fi
 # The profile selects the model. NemoClaw rejects --profile with this override.
 unset NEMOCLAW_MODEL
 # Direct tool disclosure: progressive mode hides exec behind tool search.
-nemoclaw onboard --profile "$NEMOCLAW_PROFILE" --name lab --gpu \\
+# --fresh discards a saved onboarding session. NemoClaw rejects --profile when it resumes one.
+nemoclaw onboard --profile "$NEMOCLAW_PROFILE" --name lab --gpu --fresh \\
   --tool-disclosure direct \\
   --non-interactive --yes --yes-i-accept-third-party-software
 '''
@@ -373,6 +374,7 @@ if ! [ "$(nemoclaw --version 2>/dev/null)" = "nemoclaw $NEMOCLAW_INSTALL_TAG" ];
     NEMOCLAW_DEFER_ONBOARDING=1 bash
 fi
 # Direct tool disclosure: progressive mode hides exec behind tool search.
+# --fresh discards a saved onboarding session. NemoClaw rejects --profile when it resumes one.
 nemoclaw onboard --non-interactive --tool-disclosure direct
 '''
         if args.mcp == "skill":
